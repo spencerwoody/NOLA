@@ -135,7 +135,7 @@ In response I propose a negative binomial regression model with a logit link on 
 
 \section{Model}\label{Model}
 
-We model the probability of reopening store $j$ along street $i$ as $\Pr(y_{ij} = 1) = 1/\{ 1 + \exp(-\psi_{ij}) \}$, using a probit link on a latent value $\psi_{ij}$ which comes from 
+We model the probability of reopening store $j$ along street $i$ as $\Pr(y_{ij} = 1) = 1/\{ 1 + \exp(-\psi_{ij}) \}$, using a logit link on a latent value $\psi_{ij}$ which comes from 
 %
 %
 %
@@ -181,8 +181,27 @@ The model specification is complete when we assign a noninformative flat prior f
 	\pi(\beta) &\propto 1
 \end{align*} 
 
+\subsection{MH step}
 
-
+Not easy to sample the hyperparameters...
+%
+%
+%
+\begin{align*}
+	p(\bm{\uptheta} | \bmpsi) \propto p^\star(\bm{\uptheta} | \bmpsi) :&= p(\bmpsi | \bm{\uptheta}) p(\bm{\uptheta}) \\
+	&= 
+\end{align*}
+%
+%
+%
+Use the log-normal proposal
+%
+%
+%
+\begin{align}
+	A &= \frac{p^\star(\bm{\uptheta}' | \bmpsi)}{p^\star(\bm{\uptheta} | \bmpsi)} \cdot \frac{\bm{\uptheta}'}{\bm{\uptheta}} \\
+	\Pr(\text{accept }\bm{\uptheta}') &= \min \left\{ 1, A \right\}
+\end{align}
 
 \subsection{Covariance Function}
 
@@ -223,21 +242,73 @@ which allows us to do a trick with the likelihood contribution of $y_{ij}$,
 %
 %
 \begin{align*}
-	p(y_{ij} | \psi_{ij}, \omega_{ij}) &\propto \frac{\left[ \exp(\psi_{ij}) \right]^{y_{ij}}}{1 + \exp(\psi_{ij}} \\
-	&\propto \exp \left[ \left(y_{ij} - \frac{1}{2}\right) \psi_{ij} \right] \cdot \mathbb{E}_{\omega_{ij}}\left[ \exp \left( - \omega_{ij} \psi_{ij}^2 / 2 \right) \right]
+	p(y_{ij} | \psi_{ij}, \omega_{ij}) &\propto \frac{\left[ \exp(\psi_{ij}) \right]^{y_{ij}}}{1 + \exp(\psi_{ij})} \\
+	&\propto \exp \left[ \left(y_{ij} - \frac{1}{2}\right) \psi_{ij} \right] \cdot \mathbb{E}_{\omega_{ij}}\left[ \exp \left( - \frac{1}{2} \omega_{ij} \psi_{ij}^2  \right) \right]
 \end{align*}
 
 \subsection{Gibbs sampler}
 
-The calculation for 
+The calculation for latent variable, $\omega_{ij}$
 %
 %
 %
 \begin{align*}
-	p(\omega_{ij} | y_{ij}, \psi_{ij}) &\propto p(y_{ij} | \psi_{ij}, \omega_{ij}) p(\omega) \\
+	p(\omega_{ij} | y_{ij}, \psi_{ij}) &\propto p(y_{ij} | \psi_{ij}, \omega_{ij}) p(\omega_{ij}) \\
 	&\sim \text{PG}(1, \psi_{ij})
 \end{align*}
-
+%
+%
+%
+Now, for the $\psi_{ij}$
+%
+%
+%
+\begin{align*}
+	p(\bmpsi_i | \y_i, \bm{\upomega}_i, \bm{\uptheta} ) &= \left[ \prod_{j=1}^{n_i} p(y_{ij} | \psi_{ij}, \omega_{ij}) \right] \cdot p(\bmpsi_i | \theta) \\
+	&\propto \left[ \prod_{j=1}^{n_i} \exp\left( \eta_{ij}\psi_{ij} \right) \cdot \exp \left( -\frac{1}{2} \omega_{ij}\psi_{ij}^2 \right) \right] \cdot \pN(\bmpsi_i | \mathbf{0}, \K_i), \; \eta_{ij} = y_{ij} - \frac{1}{2} \\
+	&\propto \exp \left[ -\frac{1}{2}\left( \bmpsi_i^T \bm{\upOmega}_i \bmpsi_i - 2\bm{\upeta}_i^T\bmpsi_i \right) \right] \cdot \exp \left[ -\frac{1}{2} \bmpsi_i \K_i^{-1} \bmpsi_i \right] \\
+	&\propto \exp \left[ -\frac{1}{2}\left( \bmpsi_i^T \left[ \bm{\upOmega_i} + \K_i^{-1} \right] \bmpsi_i - 2\bm{\upeta}_i^T \bmpsi_i \right) \right] \\
+	&\sim \pN \left( \left[ \bm{\upOmega_i} + \K_i^{-1} \right]^{-1}\bm{\upeta}_i, \left[ \bm{\upOmega_i} + \K_i^{-1} \right]^{-1}   \right)
+\end{align*}
+%
+%
+%
+Now, $\beta$ (flat prior)
+%
+%
+%
+\begin{align*}
+	p(\beta | \bmpsi, \bm{\uptheta}) &\propto p(\bmpsi | \f, \bm{\uptheta}) \cdot p(\beta) \\
+	&\propto  \pN(\bmpsi | X \beta, \K)  \cdot 1 \\
+	&\propto \exp\left[ -\frac{1}{2} (\bmpsi - X\beta)^T\K^{-1}(\bmpsi - X\beta) \right] \\
+	&\propto \exp\left[ -\frac{1}{2}\left( \beta^TX^T \K^{-1} X\beta - 2\bmpsi^T \K^{-1}X\beta \right) \right] \\
+	&\propto \exp\left[ -\frac{1}{2} \left( \beta - \left[ X^T \K^{-1} X \right]^{-1} X^T \K^{-1}\bmpsi \right)^T \left[ X^T \K^{-1} X \right] \left( \beta - \left[ X^T \K^{-1} X \right]^{-1} X^T \K^{-1}\bmpsi \right)\right] \\
+	&\sim \pN \left( \left[ X^T \K^{-1} X \right]^{-1} X^T \K^{-1}\bmpsi, \left[ X^T \K^{-1} X \right]^{-1} \right)
+\end{align*}
+%
+%
+%
+Now, $\beta$ (normal prior)
+%
+%
+%
+\begin{align*}
+	(\bmpsi | \f, \bm{\uptheta}) &\sim \pN(X\beta, \K) \\
+	\beta &\sim \pN(\mu, \Sigma) \\
+	%
+	\Rightarrow \left ( \begin{bmatrix}
+		\bmpsi \\
+		\beta
+	\end{bmatrix} | \bm{\uptheta} \right ) &\sim \left( \begin{bmatrix}
+		X\mu \\
+		\mu
+	\end{bmatrix},  \begin{bmatrix}
+		X\Sigma X^T + \K & X\Sigma \\
+		\Sigma X^T & \Sigma
+	\end{bmatrix} \right ) \\
+	%
+	\Rightarrow (\beta | \bmpsi, \bm{\uptheta}) &\sim \pN \left(\mu + \Sigma X^T \left[ X \Sigma X^T + \K \right]^{-1}(\bmpsi - X\mu), \Sigma - \Sigma X^T \left[ X \Sigma X^T + \K \right]^{-1} X \Sigma \right)
+\end{align*}
 %
 %
 %
